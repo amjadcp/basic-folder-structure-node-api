@@ -58,7 +58,6 @@ app.use(fileUpload({
 // api doc
 app.use('/api-doc', swaggerUI.serve, swaggerUI.setup(swaggerJsDocs))
 app.use('/api/v1', errorWrapper(require('./routes/index')))
-
 app.use(notFoundMiddleware);
 app.use(require("./middleware/errorHandler"));
 const port = process.env.PORT || 5000;
