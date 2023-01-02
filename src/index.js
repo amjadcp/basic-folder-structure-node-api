@@ -1,34 +1,28 @@
-// in production the back-end and front-end must be in same domain (some browsers don't allow third party cookies)
-// store the jwt token in cookie
-// one router in one file
-require("dotenv").config({ path: `${__dirname}/.env` });
 const express = require("express");
-
 const app = express();
-// const session = require("express-session");
-const cookieParser = require('cookie-parser');
-// const MongoStore = require("connect-mongo");
+const path = require("path");
+const dotenv = require("dotenv");
+const root_dir = __dirname.split("src")[0];
+dotenv.config({ path: path.join(root_dir, `.env`) });
 const cors = require("cors")
+const db = require(`${__dirname}/src/utils/dbConnection`); // import db connection feature from util folder
+const morgan = require("morgan");
+const rateLimiter = require("express-rate-limit");
+const helmet = require("helmet");
+const xss = require("xss-clean");
+const mongoSanitize = require("express-mongo-sanitize");
+const notFoundMiddleware = require("./middleware/not-found");
+const fileUpload = require("express-fileupload");
+
 const swaggerUI = require("swagger-ui-express")
 const YAML = require('yamljs')
 const swaggerJsDocs = YAML.load(`${__dirname}/documentation/api.yml`)
 
-const db = require(`${__dirname}/src/utils/dbConnection`); // import db connection feature from util folder
-
-const auth = require(`${__dirname}/src/routers/auth/auth`);
-const admin = require(`${__dirname}/src/routers/admin/admin`);
-const team = require(`${__dirname}/src/routers/team/team`);
-const common = require(`${__dirname}/routers/common/common`);
 
 
 db.connect();
 
-const bodyParser = require("body-parser");
-
-app.use(bodyParser.json()); // for parsing application/json
-app.use(bodyParser.urlencoded({ extended: true }));
-
-const whitelist = ["http://127.0.0.1:3000", "localhost", "http://localhost:3000", "https://main.dv966lilhc413.amplifyapp.com"];
+const whitelist = ["http://127.0.0.1:3000", "localhost", "http://localhost:3000"];
 
 app.set("trust proxy", 1); // trust first proxy
 
@@ -52,20 +46,21 @@ app.use(cors(corsOptions));
 app.use(express.json({
 	type: ["application/json", "text/plain"],
 }));
-
-app.use(cookieParser());
+app.use(helmet());
+app.use(xss());
+app.use(mongoSanitize());
+app.use(morgan("tiny"));
+app.use(fileUpload({ 
+	createParentPath: true,
+	limits: { fileSize: 50 * 1024 * 1024 }
+}));
 
 // api doc
 app.use('/api-doc', swaggerUI.serve, swaggerUI.setup(swaggerJsDocs))
+app.use('/api/v1', errorWrapper(require('./routes/index')))
 
-// auth
-app.use("/auth", [
-	auth.login,       // complete url : ROOTURL/auth/login
-])
+app.use(notFoundMiddleware);
+app.use(require("./middleware/errorHandler"));
+const port = process.env.PORT || 5000;
 
-// admin
-app.use("/admin", [
-	// admin.fileName // complete url : ROOTURL/admin/something
-])
-
-app.listen(process.env.PORT, () => console.log("Server Running on " + `${process.env.PORT}`));
+app.listen(port, () => console.log("Server Running on " + `${port}`));
